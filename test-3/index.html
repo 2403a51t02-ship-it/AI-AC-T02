@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pro Image Gallery – Polished</title>
+  <style>
+    :root{
+      --bg:#0b0f19; --card:#0f1720; --muted:#9aa6bb; --accent:#7c3aed; --gap:18px;
+      --radius:14px; --max-width:1200px;
+      --shadow: 0 10px 30px rgba(2,6,23,0.6);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:linear-gradient(180deg,#071021,#071423); color:#e6eef8; min-height:100vh; display:flex; justify-content:center; padding:36px;}
+
+    .site{width:100%; max-width:var(--max-width)}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#5b21b6);display:flex;align-items:center;justify-content:center;font-weight:700}
+    h1{font-size:20px;margin:0}
+    .subtitle{color:var(--muted);font-size:13px}
+
+    .controls{display:flex;gap:10px;align-items:center}
+    .search{padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--muted)}
+    .btn{padding:9px 12px;border-radius:10px;border:none;background:var(--accent);color:white;cursor:pointer}
+
+    /* grid */
+    .gallery{display:grid;gap:var(--gap);grid-template-columns:repeat(3,1fr)}
+    @media (max-width:1000px){.gallery{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:620px){.gallery{grid-template-columns:1fr}}
+
+    .card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;display:flex;flex-direction:column;transition:transform .18s ease, box-shadow .18s ease}
+    .card:hover{transform:translateY(-6px);box-shadow:0 22px 48px rgba(2,6,23,0.7)}
+
+    /* make image maintain aspect ratio */
+    .thumb{position:relative; width:100%; padding-bottom:62%; overflow:hidden;}
+    .thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+
+    .meta{padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+    .caption{color:var(--muted);font-size:14px}
+    .badge{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:8px;font-size:12px;color:var(--muted)}
+
+    /* Lightbox */
+    .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.75);backdrop-filter:blur(6px);opacity:0;visibility:hidden;transition:.18s}
+    .overlay.open{opacity:1;visibility:visible}
+    .modal{max-width:92%;max-height:90%;background:#07111a;padding:14px;border-radius:12px;box-shadow:0 30px 80px rgba(2,6,23,0.7);display:flex;flex-direction:column;gap:10px}
+    .modal img{max-width:100%;max-height:70vh;border-radius:8px;display:block;margin:0 auto}
+    .modal .row{display:flex;justify-content:space-between;align-items:center}
+    .close, .prev, .next{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:8px 10px;border-radius:8px;cursor:pointer}
+    .caption-big{color:var(--muted);font-size:14px}
+
+    /* small thumbnails under modal */
+    .thumbs{display:flex;gap:8px;overflow:auto;padding-top:6px}
+    .thumbs img{width:68px;height:44px;object-fit:cover;border-radius:6px;opacity:.7;border:2px solid transparent}
+    .thumbs img.active{opacity:1;border-color:var(--accent)}
+
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+      .zoomed{transform:scale(1.4) translateY(-20px); z-index:5; box-shadow:0 30px 70px rgba(0,0,0,0.6)}
+      .zoomed{transform:scale(1.4) translateY(-20px); z-index:5; box-shadow:0 30px 70px rgba(0,0,0,0.6)}
+  </style>
+</head>
+<body>
+  <div class="site">
+    <header>
+      <div class="brand">
+        <div class="logo">PG</div>
+        <div>
+          <h1>Pro Gallery</h1>
+          <div class="subtitle">Responsive 3‑column gallery · Click to enlarge · Works offline</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <input class="search" id="search" placeholder="Filter by caption (type and press Enter)" />
+        <button class="btn" id="reset">Reset</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="gallery" id="gallery">
+        <!-- cards inserted here by JS for easier control -->
+      </section>
+    </main>
+
+    <footer>Tip: Use ← → to navigate images in the lightbox. Press Esc to close.</footer>
+  </div>
+
+  <!-- overlay -->
+  <div class="overlay" id="overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="row">
+        <button class="prev" id="prev">◀</button>
+        <div class="caption-big" id="modalCaption">Image</div>
+        <button class="next" id="next">▶</button>
+      </div>
+      <img id="modalImg" src="" alt="" />
+      <div class="thumbs" id="thumbs"></div>
+      <div style="text-align:right"><button class="close" id="close">Close ✕</button></div>
+    </div>
+  </div>
+
+  <script>
+    // Verified working Unsplash images
+    const IMAGES = [
+      {src:'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1400&q=80', title:'Lake View'},
+      {src:'https://images.unsplash.com/photo-1501973801540-537f08ccae7b?auto=format&fit=crop&w=1400&q=80', title:'Beach Sunset'},
+      {src:'https://images.unsplash.com/photo-1494783367193-149034c05e8f?auto=format&fit=crop&w=1400&q=80', title:'Night City'},
+      {src:'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?auto=format&fit=crop&w=1400&q=80', title:'Snow Mountains'},
+      {src:'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1400&q=80', title:'Hot Air Balloons'},
+      {src:'https://images.unsplash.com/photo-1431794062232-2a99a5431c6c?auto=format&fit=crop&w=1400&q=80', title:'Forest'},
+      {src:'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80', title:'Ocean Waves'},
+      {src:'https://images.unsplash.com/photo-1505842465776-3d2d3f9d3d9b?auto=format&fit=crop&w=1400&q=80', title:'Architecture'},
+      {src:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80', title:'Road View'},
+      {src:'https://images.unsplash.com/photo-1504257432389-52343af06ae3?auto=format&fit=crop&w=1400&q=80', title:'Sky Clouds'},
+      {src:'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1400&q=80', title:'Flowers'},
+      {src:'https://images.unsplash.com/photo-1499084732479-de2c02d45fc4?auto=format&fit=crop&w=1400&q=80', title:'Vintage Bicycle'}
+    ];
+
+    const gallery = document.getElementById('gallery');
+    const overlay = document.getElementById('overlay');
+    const modalImg = document.getElementById('modalImg');
+    const modalCaption = document.getElementById('modalCaption');
+    const thumbs = document.getElementById('thumbs');
+    const prev = document.getElementById('prev');
+    const next = document.getElementById('next');
+    const closeBtn = document.getElementById('close');
+    const search = document.getElementById('search');
+    const reset = document.getElementById('reset');
+
+    let current = 0;
+    let filtered = IMAGES.slice();
+
+    function renderGallery(list){
+      gallery.innerHTML = '';
+      list.forEach((item, idx) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.tabIndex = 0;
+        card.dataset.index = idx;
+
+        const thumb = document.createElement('div'); thumb.className = 'thumb';
+        const img = document.createElement('img'); img.loading = 'lazy'; img.src = item.src; img.alt = item.title;
+        // fallback handler in case image fails
+        img.onerror = () => { img.src = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><rect width="100%" height="100%" fill="#0b1220"/><text x="50%" y="50%" fill="#9aa6bb" font-size="24" font-family="Arial" dominant-baseline="middle" text-anchor="middle">Image not available</text></svg>'); };
+
+        thumb.appendChild(img);
+        const meta = document.createElement('div'); meta.className = 'meta';
+        const cap = document.createElement('div'); cap.className = 'caption'; cap.textContent = item.title;
+        const badge = document.createElement('div'); badge.className = 'badge'; badge.textContent = 'Photo';
+        meta.appendChild(cap); meta.appendChild(badge);
+        card.appendChild(thumb); card.appendChild(meta);
+        gallery.appendChild(card);
+
+        // click to open modal (use index in filtered list)
+        card.addEventListener('dblclick', ()=>{
+          card.classList.toggle('zoomed');
+        });
+        card.addEventListener('dblclick', ()=>{
+          card.classList.toggle('zoomed');
+        });
+        card.addEventListener('click', () => openModal(idx));
+        card.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ openModal(idx); } });
+      });
+    }
+
+    function openModal(idx){
+      current = idx;
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden','false');
+      updateModal();
+    }
+
+    function closeModal(){
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden','true');
+    }
+
+    function updateModal(){
+      const item = filtered[current];
+      modalImg.src = item.src; modalImg.alt = item.title; modalCaption.textContent = item.title;
+      // render thumbs
+      thumbs.innerHTML = '';
+      filtered.forEach((it, i)=>{
+        const t = document.createElement('img'); t.src = it.src; t.alt = it.title; t.loading='lazy';
+        if(i===current) t.classList.add('active');
+        t.addEventListener('click', ()=>{ current = i; updateModal(); });
+        thumbs.appendChild(t);
+      });
+    }
+
+    prev.addEventListener('click', ()=>{ current = (current-1+filtered.length)%filtered.length; updateModal(); });
+    next.addEventListener('click', ()=>{ current = (current+1)%filtered.length; updateModal(); });
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeModal(); });
+    document.addEventListener('keydown', (e)=>{
+      if(overlay.classList.contains('open')){
+        if(e.key==='Escape') closeModal();
+        if(e.key==='ArrowLeft') prev.click();
+        if(e.key==='ArrowRight') next.click();
+      }
+    });
+
+    // search filter
+    search.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){
+        const q = search.value.trim().toLowerCase();
+        filtered = IMAGES.filter(it => it.title.toLowerCase().includes(q));
+        if(filtered.length===0){ alert('No images match "'+q+'"'); filtered = IMAGES.slice(); }
+        renderGallery(filtered);
+      }
+    });
+    reset.addEventListener('click', ()=>{ filtered = IMAGES.slice(); search.value=''; renderGallery(filtered); });
+
+    // initial render
+    renderGallery(filtered);
+  </script>
+</body>
+</html>
